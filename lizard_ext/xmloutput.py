@@ -66,7 +66,8 @@ def _create_file_measure(doc, result, all_result):
     measure = doc.createElement("measure")
     measure.setAttribute("type", "File")
     labels = ["Nr.", "NCSS", "CCN", "Functions"]
-    if all_in_one.public_count_functions > 0:
+    has_public_count_functions = all_in_one.public_count_functions > 0
+    if has_public_count_functions:
         labels.append("Public Functions")
 
     measure.appendChild(
@@ -81,7 +82,7 @@ def _create_file_measure(doc, result, all_result):
         file_total_ccn += source_file.CCN
         file_total_funcs += len(source_file.function_list)
         measure.appendChild(
-            _create_file_node(doc, source_file, file_nr))
+            _create_file_node(doc, source_file, file_nr, has_public_count_functions))
 
     if file_nr != 0:
         file_summary = [("NCSS", all_in_one.nloc / file_nr),
@@ -95,7 +96,7 @@ def _create_file_measure(doc, result, all_result):
                ("CCN", file_total_ccn),
                ("Functions", file_total_funcs),]
 
-    if all_in_one.public_count_functions > 0:
+    if has_public_count_functions:
         summary.append(("Public Functions", all_in_one.public_count_functions))
 
     for key, val in summary:
@@ -158,7 +159,7 @@ def _create_labeled_value_item(doc, name, label, value):
     return average_ncss
 
 
-def _create_file_node(doc, source_file, file_nr):
+def _create_file_node(doc, source_file, file_nr, has_public_count_functions):
     item = doc.createElement("item")
     item.setAttribute("name", source_file.filename)
     value1 = doc.createElement("value")
@@ -178,7 +179,7 @@ def _create_file_node(doc, source_file, file_nr):
     value4.appendChild(text4)
     item.appendChild(value4)
 
-    if source_file.public_count_functions > 0:
+    if has_public_count_functions:
         value5 = doc.createElement("value")
         text5 = doc.createTextNode(str(source_file.public_count_functions))
         value5.appendChild(text5)

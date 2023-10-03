@@ -46,3 +46,6 @@ clean-build:
 	@rm -fr build/
 	@rm -fr dist/
 	@rm -fr *.egg-info
+
+build-lizard: clean-build
+	python3 setup.py build install
