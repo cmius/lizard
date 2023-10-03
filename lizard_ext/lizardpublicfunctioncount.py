@@ -7,8 +7,6 @@ import re
 
 class LizardExtension(object):  # pylint: disable=R0903
 
-    pattern = r'public\s+(?:static\s+)?\w+\s+\w+\s*\(.*\)\s*{'
-
     def __init__(self):
         self.total_public_method_count = 0
 
