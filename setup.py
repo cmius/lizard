@@ -65,7 +65,6 @@ setup(
     version=version,
     description='''A code analyzer without caring the C/C++ header files. ''' +
         '''It works with Java, C/C++, JavaScript, Python, Ruby, Swift, Objective C. Metrics includes cyclomatic complexity number etc.''',
-    long_description=open('README.rst').read(),
     url='http://www.lizard.ws',
     project_urls={
         'Source': 'https://github.com/terryyin/lizard',
@@ -93,7 +92,6 @@ setup(
                     'Programming Language :: Python :: 3.6'],
     cmdclass={'version': VersionCommand},
     packages=['lizard_ext', 'lizard_languages'],
-    #data_files=[('lizard_ext', [])],
     py_modules=['lizard'],
     entry_points={'console_scripts': ['lizard = lizard:main']},
     author='Terry Yin',

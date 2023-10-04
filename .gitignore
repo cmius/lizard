@@ -45,3 +45,4 @@ dist/
 
 dev-env
 *.xml
+venv
