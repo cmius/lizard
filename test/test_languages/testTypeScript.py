@@ -647,7 +647,6 @@ class Test_TypeScript_generic_arrow_functions(unittest.TestCase):
 class Test_TypeScript_interface_enum_no_fp(unittest.TestCase):
     """Tests that interfaces and enums do NOT produce false positives."""
 
-    @unittest.skip("Requires interface skipping enhancement")
     def test_interface_with_methods(self):
         """Interface method signatures should not be detected as functions"""
         code = '''
@@ -676,7 +675,6 @@ class Test_TypeScript_interface_enum_no_fp(unittest.TestCase):
         functions = get_ts_function_list(code)
         self.assertEqual(["createConfig"], [f.name for f in functions])
 
-    @unittest.skip("Requires interface skipping enhancement")
     def test_index_signature_no_fp(self):
         """Index signatures with arrow types should not be FPs"""
         code = '''
@@ -889,7 +887,7 @@ class Test_TypeScript_misc_patterns(unittest.TestCase):
         self.assertEqual(["safeFetch"], [f.name for f in functions])
 
     def test_class_arrow_field(self):
-        """Class arrow field should detect the arrow as anonymous"""
+        """Class arrow field should use the field name, not (anonymous)"""
         code = '''
         class Btn {
             handleClick = () => { console.log("click"); };
@@ -898,5 +896,228 @@ class Test_TypeScript_misc_patterns(unittest.TestCase):
         '''
         functions = get_ts_function_list(code)
         names = [f.name for f in functions]
-        self.assertIn("(anonymous)", names)
+        self.assertIn("handleClick", names)
         self.assertIn("render", names)
+
+
+class Test_ts_class_field_arrow_naming(unittest.TestCase):
+    """Class field arrows (field = () => {}) should be named by the field."""
+
+    def test_basic_class_field_arrow(self):
+        """handleClick = () => {} should be named handleClick"""
+        code = '''
+        class Btn {
+            handleClick = () => { console.log("click"); };
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["handleClick"], [f.name for f in functions])
+
+    def test_multiple_class_field_arrows(self):
+        """Multiple field arrows should each get their field name"""
+        code = '''
+        class Form {
+            handleSubmit = () => { this.submit(); };
+            handleReset = () => { this.reset(); };
+            validate = (value: string) => { return value.length > 0; };
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(
+            ["handleSubmit", "handleReset", "validate"],
+            [f.name for f in functions])
+
+    def test_field_arrows_mixed_with_methods(self):
+        """Field arrows and regular methods should all be correctly named"""
+        code = '''
+        class UserDashboard {
+            handleLogin = () => { this.login(); };
+            handleLogout = () => { this.logout(); };
+            render() { return null; }
+            componentDidMount() { this.fetchData(); }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(
+            ["handleLogin", "handleLogout", "render", "componentDidMount"],
+            [f.name for f in functions])
+
+    def test_typed_field_arrow(self):
+        """Field arrow with type annotation should use field name"""
+        code = '''
+        class Api {
+            fetchData = async (url: string): Promise<Response> => {
+                return fetch(url);
+            };
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["fetchData"], [f.name for f in functions])
+
+    def test_field_arrow_after_typed_property(self):
+        """Field arrow after a typed property (not arrow) should be named"""
+        code = '''
+        class Counter {
+            count: number;
+            increment = () => { this.count++; };
+            decrement = () => { this.count--; };
+            getCount() { return this.count; }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(
+            ["increment", "decrement", "getCount"],
+            [f.name for f in functions])
+
+    def test_static_field_arrow(self):
+        """Static field arrows should be detected (name may vary)"""
+        code = '''
+        class Logger {
+            static instance = () => { return new Logger(); };
+            log() { console.log("msg"); }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        names = [f.name for f in functions]
+        self.assertIn("log", names)
+        self.assertEqual(2, len(functions))
+
+    def test_inline_callbacks_remain_anonymous(self):
+        """Inline callbacks (.map, .filter) should stay (anonymous)"""
+        code = '''
+        class Processor {
+            process(items: string[]) {
+                return items
+                    .map(x => x.trim())
+                    .filter(x => x.length > 0);
+            }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        names = [f.name for f in functions]
+        self.assertIn("process", names)
+        anon_count = sum(1 for n in names if n == "(anonymous)")
+        self.assertGreaterEqual(anon_count, 2)
+
+
+class Test_ts_builtin_name_functions(unittest.TestCase):
+    """Functions/methods named after JS builtins must still be detected."""
+
+    def test_function_named_String(self):
+        """function String() {} is a legitimate function definition"""
+        code = 'function String() { return "custom"; }'
+        functions = get_ts_function_list(code)
+        self.assertEqual(["String"], [f.name for f in functions])
+
+    def test_class_method_named_Number(self):
+        """Class method named Number should be detected"""
+        code = '''
+        class Util {
+            Number() { return 0; }
+            Boolean() { return true; }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["Number", "Boolean"], [f.name for f in functions])
+
+    def test_object_method_named_Array(self):
+        """Object method named Array should be detected"""
+        code = '''
+        const obj = {
+            Array() { return []; },
+            Object() { return {}; }
+        };
+        '''
+        functions = get_ts_function_list(code)
+        names = [f.name for f in functions]
+        self.assertIn("Array", names)
+        self.assertIn("Object", names)
+
+    def test_builtin_call_not_detected(self):
+        """const s = String(42) should NOT be a function definition"""
+        code = '''
+        const s = String(42);
+        const n = Number("5");
+        function realFn() { return 1; }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["realFn"], [f.name for f in functions])
+
+    def test_bare_builtin_call_not_detected(self):
+        """String(42) bare call should NOT be a function definition"""
+        code = '''
+        String(42);
+        Number(true);
+        function realFn() { return 1; }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["realFn"], [f.name for f in functions])
+
+
+class Test_ts_abstract_method_detection(unittest.TestCase):
+    """Abstract methods should not be detected as functions."""
+
+    def test_abstract_method_skipped(self):
+        """abstract doWork(): void should not be detected"""
+        code = '''
+        abstract class Base {
+            abstract doWork(): void;
+            concrete() { return 1; }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["concrete"], [f.name for f in functions])
+
+    def test_abstract_with_params_skipped(self):
+        """abstract method with params should not be detected"""
+        code = '''
+        abstract class Service {
+            abstract fetch(url: string, options: object): Promise<Response>;
+            abstract parse(data: string): object;
+            process() { return this.fetch("").then(r => this.parse(r)); }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        names = [f.name for f in functions]
+        self.assertIn("process", names)
+        self.assertNotIn("fetch", names)
+        self.assertNotIn("parse", names)
+
+    def test_abstract_class_not_abstract_function(self):
+        """abstract class declaration should not affect non-abstract methods"""
+        code = '''
+        abstract class Widget {
+            render() { return null; }
+            update() { this.render(); }
+        }
+        '''
+        functions = get_ts_function_list(code)
+        self.assertEqual(["render", "update"], [f.name for f in functions])
+
+
+class Test_ts_param_type_filtering(unittest.TestCase):
+    """Type keywords should be filtered from parameter counts."""
+
+    def test_simple_typed_params(self):
+        """fn(x: string, y: number) should have 2 params"""
+        code = 'function fn(x: string, y: number, z: boolean) {}'
+        functions = get_ts_function_list(code)
+        self.assertEqual(3, functions[0].parameter_count)
+
+    def test_generic_type_in_params(self):
+        """fn(x: Map<string, number>, y: boolean) — generic comma not counted"""
+        code = 'function fn(x: Map<string, number>, y: boolean) {}'
+        functions = get_ts_function_list(code)
+        self.assertEqual(2, functions[0].parameter_count)
+
+    def test_nested_generic_in_params(self):
+        """fn(x: Promise<Array<string>>, y: number) — nested generics"""
+        code = 'function fn(x: Promise<Array<string>>, y: number) {}'
+        functions = get_ts_function_list(code)
+        self.assertEqual(2, functions[0].parameter_count)
+
+    def test_multiple_generic_params(self):
+        """fn(a: Map<K, V>, b: Set<T>, c: number) — multiple generics"""
+        code = 'function fn(a: Map<K, V>, b: Set<T>, c: number) {}'
+        functions = get_ts_function_list(code)
+        self.assertEqual(3, functions[0].parameter_count)
